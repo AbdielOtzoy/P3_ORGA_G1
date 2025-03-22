@@ -2,6 +2,8 @@
 
 #define TRIG 9
 #define ECHO 10
+#define PIN_ENTRADA_3 3
+#define PIN_SALIDA_4 4
 #define PIN_ENTRADA_7 7
 #define PIN_SALIDA_8 8
 #define PIN_ENTRADA_2 2
@@ -12,7 +14,8 @@ Servo servo2;
 bool objetoDetectado = false;  
 bool esperandoObjetoSalir = false;  
 unsigned long tiempoInicio = 0;
-const int TIEMPO_ESPERA = 20000; // 20 segundos
+const int TIEMPO_ESPERA = 2000; // 20 segundos
+const int TIEMPO_SERVO2_ACTIVO = 3000;
 
 // Para controlar el segundo servomotor
 bool segundoServoActivo = false;
@@ -21,6 +24,8 @@ unsigned long tiempoSegundoServo = 0;
 void setup() {
   pinMode(TRIG, OUTPUT);
   pinMode(ECHO, INPUT);
+  pinMode(PIN_ENTRADA_3, INPUT);
+  pinMode(PIN_SALIDA_4, OUTPUT);
   pinMode(PIN_ENTRADA_7, INPUT);
   pinMode(PIN_SALIDA_8, OUTPUT);
   pinMode(PIN_ENTRADA_2, INPUT);
@@ -38,6 +43,7 @@ void loop() {
   // ----------------------------
   // FUNCIONALIDAD 1: Sensor ultrasónico + barrera
   // ----------------------------
+  // Medir la distancia
   digitalWrite(TRIG, LOW);
   delayMicroseconds(2);
   digitalWrite(TRIG, HIGH);
@@ -45,39 +51,54 @@ void loop() {
   digitalWrite(TRIG, LOW);
 
   long duration = pulseIn(ECHO, HIGH);
-  int distance = duration * 0.034 / 2;
-
+  int distance = duration * 0.034 / 2; // Convertir tiempo a distancia en cm
+  
   Serial.print("Distancia: ");
   Serial.print(distance);
   Serial.println(" cm");
 
-  if (distance <= 5 && !objetoDetectado && !esperandoObjetoSalir) {
+  // Si detecta un objeto a 5 cm o menos y la barrera no está arriba ni esperando que el objeto se retire
+  if (distance <= 5 && !objetoDetectado && !esperandoObjetoSalir) {  
     Serial.println("🚗 Objeto detectado a 5 cm. Levantando la barrera...");
-    servo.write(90);
+    servo.write(90);  // Sube la barrera
     objetoDetectado = true;
-    tiempoInicio = millis();
+    tiempoInicio = millis();  // Guarda el tiempo en que la barrera subió
   }
 
+  // Si la barrera está arriba y han pasado 20 segundos, bajarla
   if (objetoDetectado && millis() - tiempoInicio >= TIEMPO_ESPERA) {
     Serial.println("⬇ Bajando la barrera...");
-    servo.write(0);
-    esperandoObjetoSalir = true;
-    objetoDetectado = false;
+    servo.write(0);  // Baja la barrera
+    esperandoObjetoSalir = true;  // Ahora espera que el objeto se retire
+    objetoDetectado = false;  // Resetea la detección de objeto
   }
 
-  if (esperandoObjetoSalir && distance > 5) {
+  // Espera a que el objeto se quite antes de volver a detectar otro
+  if (esperandoObjetoSalir && distance > 5) {  
     Serial.println("✅ Objeto retirado. Sistema listo para detectar otro vehículo.");
-    esperandoObjetoSalir = false;
+    esperandoObjetoSalir = false;  // Reinicia el sistema
   }
+
+  delay(100); // Pequeño retraso para evitar lecturas erráticas
 
   // ----------------------------
-  // FUNCIONALIDAD 2: Si pin 7 está en HIGH → activar pin 8 por 0.5 segundos
+  // FUNCIONALIDAD 2.0: Si pin 7 está en HIGH → activar pin 8 por 0.5 segundos
   // ----------------------------
   if (digitalRead(PIN_ENTRADA_7) == HIGH) {
     Serial.println("⚡ Entrada en pin 7 detectada. Activando pin 8 por 0.5 segundos.");
     digitalWrite(PIN_SALIDA_8, HIGH);
     delay(500);
     digitalWrite(PIN_SALIDA_8, LOW);
+  }
+
+  // ----------------------------
+  // FUNCIONALIDAD 2.1: Si pin 3 está en HIGH → activar pin 4 por 0.5 segundos
+  // ----------------------------
+  if (digitalRead(PIN_ENTRADA_3) == HIGH) {
+    Serial.println("⚡ Entrada en pin 3 detectada. Activando pin 4 por 0.5 segundos.");
+    digitalWrite(PIN_SALIDA_4, HIGH);
+    delay(500);
+    digitalWrite(PIN_SALIDA_4, LOW);
   }
 
   // ----------------------------
@@ -90,7 +111,7 @@ void loop() {
     segundoServoActivo = true;
   }
 
-  if (segundoServoActivo && millis() - tiempoSegundoServo >= 5000) {
+  if (segundoServoActivo && millis() - tiempoSegundoServo >= TIEMPO_SERVO2_ACTIVO) {
     Serial.println("🔴 Cerrando segundo servomotor después de 5 segundos.");
     servo2.write(0); // Vuelve a 0 grados
     segundoServoActivo = false;
